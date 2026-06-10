@@ -11,8 +11,6 @@ Correr desde la raiz del proyecto:
 
 import math
 
-import networkx as nx
-import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -82,59 +80,122 @@ with st.spinner("Calculando métricas…"):
 st.header("📊 Estadísticas generales")
 
 c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Actores (nodos)", f"{M['n_all']:,}")
-c2.metric("Colaboraciones (aristas)", f"{M['m_all']:,}")
-c3.metric("Grado medio k", f"{M['k']:.1f}")
-c4.metric("Componentes", f"{M['n_components']:,}")
+c1.metric("Actores (nodos)", f"{M['n_all']:,}",
+          help="Cada actor o actriz único es un **nodo** de la red.")
+c2.metric("Colaboraciones (aristas)", f"{M['m_all']:,}",
+          help="Pares de actores que actuaron juntos en al menos una película "
+               "(cada par se cuenta una sola vez aunque compartan varias películas).")
+c3.metric("Grado medio k", f"{M['k']:.1f}",
+          help="Promedio de coactores distintos por actor en el LCC "
+               "(k = 2·aristas / nodos).")
+c4.metric("Componentes", f"{M['n_components']:,}",
+          help="Cantidad de subredes desconectadas entre sí. Los actores de "
+               "componentes distintos no tienen ninguna cadena que los una.")
 c5.metric("Componente mayor (LCC)", f"{M['n']:,}",
-          help="El análisis small-world se calcula sobre este componente conexo.")
+          help="Tamaño del componente conexo más grande (*Largest Connected "
+               "Component*). El análisis small-world se calcula sobre él.")
 
 st.subheader("Fenómeno small-world (Tabla 1 del paper)")
 
 def fmt(x):
     return "—" if (x is None or (isinstance(x, float) and math.isnan(x))) else f"{x:.4g}"
 
-tabla = pd.DataFrame({
-    "": ["Cine argentino (LCC)"],
-    "L_actual": [fmt(M["L_actual"])],
-    "L_random": [fmt(M["L_random"])],
-    "C_actual": [fmt(M["C_actual"])],
-    "C_random": [fmt(M["C_random"])],
-})
-st.table(tabla.set_index(""))
+sigma = M["sigma"]
+es_sw = (not math.isnan(sigma)) and sigma > 1 and M["C_actual"] > 5 * M["C_random"]
 
-colA, colB = st.columns([2, 1])
-with colA:
-    st.markdown(
-        "- **L** (longitud característica de camino): nº medio de pasos en el camino "
-        "más corto entre dos actores. **C** (clustering): qué tan probable es que dos "
-        "colegas de un actor también hayan actuado juntos.\n"
-        "- Una red es **small-world** cuando `L ≈ L_random` pero `C ≫ C_random`: "
-        "caminos cortos como en un grafo aleatorio, pero mucho más agrupada."
-    )
-    if not M["L_exact"]:
-        st.caption("⚠️ L estimada por muestreo (grafo grande) para mantener la "
-                   "respuesta rápida.")
-with colB:
-    sigma = M["sigma"]
-    es_sw = (not math.isnan(sigma)) and sigma > 1 and M["C_actual"] > 5 * M["C_random"]
-    st.metric("Coeficiente small-world σ", fmt(sigma),
-              help="σ = (C/C_random) / (L/L_random). σ ≫ 1 indica small-world.")
-    if es_sw:
-        st.success("✅ La red **es small-world**: muy agrupada y con caminos cortos.")
-    elif not math.isnan(sigma):
-        st.info("Señal small-world parcial: revisá C vs C_random.")
+s1, s2, s3, s4, s5 = st.columns(5)
+s1.metric("L_actual", fmt(M["L_actual"]),
+          help="**Longitud característica de camino**: nº medio de pasos del camino "
+               "más corto entre dos actores del LCC. Acá: en promedio cualquier par "
+               "de actores está a ~%s películas de distancia." % fmt(M["L_actual"]))
+s2.metric("L_random", fmt(M["L_random"]),
+          help="L esperada en un grafo **aleatorio** del mismo tamaño y grado: "
+               "ln(n)/ln(k). Sirve de referencia: si L_actual ≈ L_random, la red "
+               "tiene caminos tan cortos como uno al azar.")
+s3.metric("C_actual", fmt(M["C_actual"]),
+          help="**Coeficiente de clustering**: fracción media de pares de coactores "
+               "de un actor que además actuaron entre sí (0 a 1). Mide cuán cerrados "
+               "son los 'círculos' de la red.")
+s4.metric("C_random", fmt(M["C_random"]),
+          help="C esperado en un grafo **aleatorio** del mismo tamaño y grado: k/n. "
+               "Suele ser diminuto.")
+s5.metric("σ (small-world)", fmt(sigma),
+          help="Coeficiente small-world: σ = (C_actual/C_random) / "
+               "(L_actual/L_random). **σ ≫ 1** ⇒ la red combina alto clustering con "
+               "caminos cortos = small-world.")
+
+if es_sw:
+    st.success("✅ La red **es small-world**: tan navegable como un grafo aleatorio "
+               f"(L≈L_random) pero ~{M['C_actual']/M['C_random']:.0f}× más agrupada "
+               "que uno (C ≫ C_random).")
+elif not math.isnan(sigma):
+    st.info("Señal small-world parcial: revisá C frente a C_random.")
+if not M["L_exact"]:
+    st.caption("⚠️ L y C estimadas por muestreo (grafo grande) para mantener la "
+               "respuesta rápida.")
+
+st.markdown(
+    """
+**¿Qué son L y C?**
+
+- **L — longitud característica de camino.** Tomá dos actores cualesquiera y contá el
+  mínimo de coprotagonismos que hay que encadenar para ir de uno al otro
+  (A actuó con B, B con C, …). **L** es el promedio de ese número sobre *todos* los
+  pares. Es una propiedad **global**: mide qué tan "chico" es el mundo. Un L bajo
+  (≈3) significa que casi todo el cine argentino está a tres películas de distancia.
+- **C — coeficiente de clustering.** Mirá los coactores de un actor: ¿cuántos de esos
+  pares actuaron *también* entre sí? Esa proporción, promediada sobre todos los
+  actores, es **C** (entre 0 y 1). Es una propiedad **local**: mide cuán cerrados son
+  los círculos. Un C alto (≈0.85) dice que los elencos forman grupos muy entrelazados.
+
+**El fenómeno small-world** (Watts & Strogatz, 1998) aparece cuando ambas conviven:
+`L ≈ L_random` (caminos cortos, como en un grafo al azar) **pero** `C ≫ C_random`
+(muchísimo más agrupada que el azar). Es lo que popularmente se conoce como los
+*"seis grados de separación"*.
+""")
 
 # --- Distribucion de grados ---
 st.subheader("Distribución de grados")
 seq = gu.degree_sequence(G)
-fig_deg = go.Figure(go.Histogram(x=seq, nbinsx=50))
-fig_deg.update_layout(
-    xaxis_title="Grado (nº de coactores)", yaxis_title="Cantidad de actores",
-    yaxis_type="log", bargap=0.02, height=320, margin=dict(t=10, b=10))
-st.plotly_chart(fig_deg, width="stretch")
-st.caption("Escala log en el eje Y: pocos actores muy conectados, muchos con pocas "
-           "conexiones (típico de redes sociales reales).")
+
+vista = st.radio(
+    "Vista", ["Histograma", "Log–log P(k)"], horizontal=True,
+    label_visibility="collapsed",
+    help="**Histograma**: cuántos actores tienen cada nivel de conexiones. "
+         "**Log–log P(k)**: la probabilidad de que un actor tenga grado k, en ejes "
+         "logarítmicos; si forma una recta, la red es *scale-free* (libre de escala).")
+
+if vista == "Histograma":
+    log_x = st.checkbox("Escala log también en el eje X", value=False,
+                        help="Útil porque hay pocos actores con grado muy alto: en "
+                             "escala lineal la cola larga queda comprimida.")
+    fig_deg = go.Figure(go.Histogram(
+        x=seq, nbinsx=50,
+        hovertemplate="Grado: %{x}<br>Actores: %{y}<extra></extra>"))
+    fig_deg.update_layout(
+        xaxis_title="Grado (nº de coactores)", yaxis_title="Cantidad de actores",
+        yaxis_type="log", xaxis_type="log" if log_x else "linear",
+        bargap=0.02, height=340, margin=dict(t=10, b=10))
+    st.plotly_chart(fig_deg, width="stretch")
+    st.caption("Eje Y logarítmico: muy pocos actores están enormemente conectados y "
+               "una gran masa tiene pocas conexiones (cola larga típica de redes reales).")
+else:
+    from collections import Counter
+    cnt = Counter(seq)
+    n_nodes = len(seq)
+    ks = sorted(k for k in cnt if k > 0)
+    pk = [cnt[k] / n_nodes for k in ks]
+    fig_deg = go.Figure(go.Scatter(
+        x=ks, y=pk, mode="markers",
+        marker=dict(size=6, opacity=0.7),
+        hovertemplate="Grado k: %{x}<br>P(k): %{y:.4f}<extra></extra>"))
+    fig_deg.update_layout(
+        xaxis_title="Grado k (log)", yaxis_title="P(k) — fracción de actores (log)",
+        xaxis_type="log", yaxis_type="log", height=340, margin=dict(t=10, b=10))
+    st.plotly_chart(fig_deg, width="stretch")
+    st.caption("Distribución de grados en ejes log–log: si los puntos caen sobre una "
+               "recta, P(k) sigue una **ley de potencias** (red *scale-free*) — pocos "
+               "*hubs* muy conectados y muchísimos actores con pocas colaboraciones.")
 
 # --- Top actores ---
 st.subheader("Actores más conectados")

@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+
+# Streamlit / logs temporales
+dashboard/st.log
+.streamlit/
+
+# Editor / SO
+.DS_Store
+Thumbs.db

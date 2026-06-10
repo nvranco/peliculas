@@ -2,3 +2,5 @@ streamlit>=1.55
 networkx>=3.6
 pandas>=2.3
 plotly>=6.6
+scipy>=1.11
+numpy>=1.26

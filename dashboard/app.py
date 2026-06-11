@@ -22,7 +22,9 @@ st.set_page_config(page_title="Cine Argentino · Red de actores",
 # --------------------------------------------------------------------------- #
 # Encabezado
 # --------------------------------------------------------------------------- #
-st.title("🎬 Red de colaboración del cine argentino")
+st.title("🎬 Conexiones entre actores argentinos")
+st.markdown(
+    "*por [Nicolás Vrancovich](https://www.linkedin.com/in/nvrancovich/)*")
 st.markdown(
     "Análisis *small-world* de la red de actores (nodos = actores; una arista une "
     "a dos actores que actuaron en la **misma película**), replicando "
@@ -154,59 +156,17 @@ st.markdown(
 *"seis grados de separación"*.
 """)
 
-# --- Distribucion de grados ---
-st.subheader("Distribución de grados")
-seq = gu.degree_sequence(G)
-
-vista = st.radio(
-    "Vista", ["Histograma", "Log–log P(k)"], horizontal=True,
-    label_visibility="collapsed",
-    help="**Histograma**: cuántos actores tienen cada nivel de conexiones. "
-         "**Log–log P(k)**: la probabilidad de que un actor tenga grado k, en ejes "
-         "logarítmicos; si forma una recta, la red es *scale-free* (libre de escala).")
-
-if vista == "Histograma":
-    log_x = st.checkbox("Escala log también en el eje X", value=False,
-                        help="Útil porque hay pocos actores con grado muy alto: en "
-                             "escala lineal la cola larga queda comprimida.")
-    fig_deg = go.Figure(go.Histogram(
-        x=seq, nbinsx=50,
-        hovertemplate="Grado: %{x}<br>Actores: %{y}<extra></extra>"))
-    fig_deg.update_layout(
-        xaxis_title="Grado (nº de coactores)", yaxis_title="Cantidad de actores",
-        yaxis_type="log", xaxis_type="log" if log_x else "linear",
-        bargap=0.02, height=340, margin=dict(t=10, b=10))
-    st.plotly_chart(fig_deg, width="stretch")
-    st.caption("Eje Y logarítmico: muy pocos actores están enormemente conectados y "
-               "una gran masa tiene pocas conexiones (cola larga típica de redes reales).")
-else:
-    from collections import Counter
-    cnt = Counter(seq)
-    n_nodes = len(seq)
-    ks = sorted(k for k in cnt if k > 0)
-    pk = [cnt[k] / n_nodes for k in ks]
-    fig_deg = go.Figure(go.Scatter(
-        x=ks, y=pk, mode="markers",
-        marker=dict(size=6, opacity=0.7),
-        hovertemplate="Grado k: %{x}<br>P(k): %{y:.4f}<extra></extra>"))
-    fig_deg.update_layout(
-        xaxis_title="Grado k (log)", yaxis_title="P(k) — fracción de actores (log)",
-        xaxis_type="log", yaxis_type="log", height=340, margin=dict(t=10, b=10))
-    st.plotly_chart(fig_deg, width="stretch")
-    st.caption("Distribución de grados en ejes log–log: si los puntos caen sobre una "
-               "recta, P(k) sigue una **ley de potencias** (red *scale-free*) — pocos "
-               "*hubs* muy conectados y muchísimos actores con pocas colaboraciones.")
-
 # --- Top actores ---
 st.subheader("Actores más conectados")
 top = gu.top_actors(G, 15)
 colT1, colT2 = st.columns([1, 1])
 with colT1:
-    st.dataframe(top, width="stretch", hide_index=True)
+    st.dataframe(top, width="stretch", hide_index=True, height=360)
 with colT2:
     fig_top = go.Figure(go.Bar(
-        x=top["conexiones"][::-1], y=top["actor"][::-1], orientation="h"))
-    fig_top.update_layout(height=480, margin=dict(t=10, b=10, l=10),
+        x=top["conexiones"][::-1], y=top["actor"][::-1], orientation="h",
+        hovertemplate="%{y}<br>conexiones: %{x}<extra></extra>"))
+    fig_top.update_layout(height=360, margin=dict(t=10, b=10, l=10),
                           xaxis_title="conexiones (grado)")
     st.plotly_chart(fig_top, width="stretch")
 
